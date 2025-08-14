@@ -1,11 +1,15 @@
 package db
 
 import (
+	"bytes"
+	"errors"
+
 	bolt "go.etcd.io/bbolt"
 )
 
 var (
-	dbBucket = []byte("default")
+	dbBucket      = []byte("default")
+	replicaBucket = []byte("replication")
 )
 
 type DB struct {
@@ -20,7 +24,7 @@ func New(path string, readOnly bool) (d *DB, err error) {
 	}
 	d = &DB{db: database, readOnly: readOnly}
 
-	if err := d.createDefaultBucket(); err != nil {
+	if err := d.createBuckets(); err != nil {
 		d.db.Close()
 		return nil, err
 	}
@@ -28,25 +32,81 @@ func New(path string, readOnly bool) (d *DB, err error) {
 	return d, nil
 }
 
-func (d *DB) createDefaultBucket() error {
+func (d *DB) createBuckets() error {
 	return d.db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(dbBucket)
-		return err
+		if _, err := tx.CreateBucketIfNotExists(dbBucket); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists(replicaBucket); err != nil {
+			return err
+		}
+		return nil
 	})
 }
 
 func (d *DB) SetKey(key string, value []byte) error {
+	if d.readOnly {
+		return errors.New("read-only mode")
+	}
+
 	return d.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(dbBucket)
-		return b.Put([]byte(key), value)
+		if err := tx.Bucket(dbBucket).Put([]byte(key), value); err != nil {
+			return err
+		}
+
+		return tx.Bucket(replicaBucket).Put([]byte(key), value)
 	})
 }
+func copyByteSlice(b []byte) []byte {
+	if b == nil {
+		return nil
+	}
+	res := make([]byte, len(b))
+	copy(res, b)
+	return res
+}
 
+// get next key for replication
+// it returns the key and value for keys that have not been replicated yet
+func (d *DB) GetNextReplicasKey() (key, value []byte, err error) {
+	err = d.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(replicaBucket)
+		k, v := b.Cursor().First()
+		key = copyByteSlice(k)
+		value = copyByteSlice(v)
+		return nil
+	})
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return key, value, nil
+}
+
+// DeleteReplicationKey deletes the key from the replication queue
+// if the value matches the contents or if the key is already absent.
+func (d *DB) DeleteReplicationKey(key, value []byte) (err error) {
+	return d.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(replicaBucket)
+
+		v := b.Get(key)
+		if v == nil {
+			return errors.New("key does not exist")
+		}
+
+		if !bytes.Equal(v, value) {
+			return errors.New("value does not match")
+		}
+
+		return b.Delete(key)
+	})
+}
 func (d *DB) GetKey(key string) ([]byte, error) {
 	var value []byte
 	err := d.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(dbBucket)
-		value = b.Get([]byte(key))
+		value = copyByteSlice(b.Get([]byte(key)))
 		return nil
 	})
 	if err == nil {
@@ -92,4 +152,10 @@ func (d *DB) DeleteReshardKeys(isExtra func(string) bool) error {
 		return nil
 	})
 
+}
+
+func (d *DB) SetKeyOnReplica(key string, value []byte) error {
+	return d.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(dbBucket).Put([]byte(key), value)
+	})
 }

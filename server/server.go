@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -72,4 +73,39 @@ func (s *Server) DeleteReshardKeysHandler(w http.ResponseWriter, r *http.Request
 		s.db.DeleteReshardKeys(func(key string) bool {
 			return s.shards.Index(key) != s.shards.CurIdx
 		}))
+}
+
+// NextKeyValue contains the response for GetNextKeyForReplication.
+type NextKeyValue struct {
+	Key   string
+	Value string
+	Err   error
+}
+
+// GetNextKeyForReplication returns the next key for replication.
+func (s *Server) GetNextKeyForReplicationHandler(w http.ResponseWriter, r *http.Request) {
+	enc := json.NewEncoder(w)
+	k, v, err := s.db.GetNextReplicasKey()
+	enc.Encode(&NextKeyValue{
+		Key:   string(k),
+		Value: string(v),
+		Err:   err,
+	})
+}
+
+// DeleteReplicationKey deletes the key from replica queue.
+func (s *Server) DeleteReplicationKeyHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+
+	key := r.Form.Get("key")
+	value := r.Form.Get("value")
+
+	err := s.db.DeleteReplicationKey([]byte(key), []byte(value))
+	if err != nil {
+		w.WriteHeader(http.StatusExpectationFailed)
+		fmt.Fprintf(w, "error: %v", err)
+		return
+	}
+
+	fmt.Fprintf(w, "ok")
 }

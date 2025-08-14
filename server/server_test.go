@@ -16,7 +16,7 @@ import (
 	"github.com/matheusfrancisco/diskvgo/server"
 )
 
-func createShardDb(t *testing.T, idx int) *db.DB{
+func createShardDb(t *testing.T, idx int, readOnly bool) *db.DB {
 	t.Helper()
 
 	tmpFile, err := ioutil.TempFile(os.TempDir(), fmt.Sprintf("db%d", idx))
@@ -29,7 +29,7 @@ func createShardDb(t *testing.T, idx int) *db.DB{
 	name := tmpFile.Name()
 	t.Cleanup(func() { os.Remove(name) })
 
-	d, err := db.New(name, false)
+	d, err := db.New(name, readOnly)
 	if err != nil {
 		t.Fatalf("Could not create new database %q: %v", name, err)
 	}
@@ -41,7 +41,7 @@ func createShardDb(t *testing.T, idx int) *db.DB{
 func createShardServer(t *testing.T, idx int, addrs map[int]string) (*db.DB, *server.Server) {
 	t.Helper()
 
-	db := createShardDb(t, idx)
+	db := createShardDb(t, idx, false)
 
 	cfg := &config.Shards{
 		Addrs:  addrs,
