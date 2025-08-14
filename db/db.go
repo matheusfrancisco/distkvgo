@@ -10,22 +10,18 @@ var (
 
 type DB struct {
 	db *bolt.DB
+	readOnly bool
 }
 
-func New(path string) (d *DB, err error) {
+func New(path string, readOnly bool) (d *DB, err error) {
 	database, err := bolt.Open(path, 0600, nil)
 	if err != nil {
 		return nil, err
 	}
-	d = &DB{db: database}
-	cleanup := d.Close
-	defer func() {
-		if cleanup != nil {
-			cleanup()
-		}
-	}()
+	d = &DB{db: database, readOnly: readOnly}
 
 	if err := d.createDefaultBucket(); err != nil {
+		d.db.Close()
 		return nil, err
 	}
 
