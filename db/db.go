@@ -9,7 +9,7 @@ var (
 )
 
 type DB struct {
-	db *bolt.DB
+	db       *bolt.DB
 	readOnly bool
 }
 
@@ -57,4 +57,39 @@ func (d *DB) GetKey(key string) ([]byte, error) {
 
 func (d *DB) Close() error {
 	return d.db.Close()
+}
+
+func (d *DB) DeleteReshardKeys(isExtra func(string) bool) error {
+	var keys []string
+
+	err := d.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(dbBucket)
+
+		if b == nil {
+			return nil // No bucket found, nothing to delete
+		}
+
+		return b.ForEach(func(k, v []byte) error {
+			if isExtra(string(k)) {
+				keys = append(keys, string(k))
+			}
+			return nil
+		})
+
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return d.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(dbBucket)
+		for _, k := range keys {
+			if err := b.Delete([]byte(k)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
 }

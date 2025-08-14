@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/matheusfrancisco/diskvgo/config"
-
 )
 
 func createConfig(t *testing.T, contents string) config.Config {
@@ -37,14 +36,14 @@ func createConfig(t *testing.T, contents string) config.Config {
 
 func TestConfigParse(t *testing.T) {
 	got := createConfig(t, `[[shards]]
-		name = "Moscow"
+		name = "A"
 		idx = 0
 		address = "localhost:8080"`)
 
 	want := config.Config{
 		Shards: []config.Shard{
 			{
-				Name:    "Moscow",
+				Name:    "A",
 				Idx:     0,
 				Address: "localhost:8080",
 			},
@@ -59,15 +58,15 @@ func TestConfigParse(t *testing.T) {
 func TestParseShards(t *testing.T) {
 	c := createConfig(t, `
 	[[shards]]
-		name = "Moscow"
+		name = "A"
 		idx = 0
 		address = "localhost:8080"
 	[[shards]]
-		name = "Minsk"
+		name = "B"
 		idx = 1
 		address = "localhost:8081"`)
 
-	got, err := config.ParseShards(c.Shards, "Minsk")
+	got, err := config.ParseShards(c.Shards, "B")
 	if err != nil {
 		t.Fatalf("Could not parse shards %#v: %v", c.Shards, err)
 	}

@@ -65,3 +65,11 @@ func (s *Server) SetHandler(w http.ResponseWriter, r *http.Request) {
 	err := s.db.SetKey(key, []byte(value))
 	fmt.Fprintf(w, "Error = %v, shardIdx = %d, current shard = %d", err, shard, s.shards.CurIdx)
 }
+
+func (s *Server) DeleteReshardKeysHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(
+		w, "Error = %v",
+		s.db.DeleteReshardKeys(func(key string) bool {
+			return s.shards.Index(key) != s.shards.CurIdx
+		}))
+}

@@ -51,6 +51,7 @@ func main() {
 
 	http.HandleFunc("/get", srv.GetHandler)
 	http.HandleFunc("/set", srv.SetHandler)
+	http.HandleFunc("/delete", srv.DeleteReshardKeysHandler)
 
 	log.Fatal(http.ListenAndServe(*httpAddr, nil))
 }
