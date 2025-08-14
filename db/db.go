@@ -1,8 +1,6 @@
 package db
 
 import (
-	"log"
-
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -14,12 +12,31 @@ type DB struct {
 	db *bolt.DB
 }
 
-func New(path string) (db *DB, err error) {
+func New(path string) (d *DB, err error) {
 	database, err := bolt.Open(path, 0600, nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	return &DB{db: database}, nil
+	d = &DB{db: database}
+	cleanup := d.Close
+	defer func() {
+		if cleanup != nil {
+			cleanup()
+		}
+	}()
+
+	if err := d.createDefaultBucket(); err != nil {
+		return nil, err
+	}
+
+	return d, nil
+}
+
+func (d *DB) createDefaultBucket() error {
+	return d.db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists(dbBucket)
+		return err
+	})
 }
 
 func (d *DB) SetKey(key string, value []byte) error {
